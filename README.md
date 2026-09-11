@@ -78,7 +78,7 @@ Documentation is never scanned. The first live run of this tool reported four fi
 ## In CI
 
 ```yaml
-- uses: catidegla/bumpdiff@v0.1.0
+- uses: catidegla/bumpdiff@v0.1.1
   with:
     lockfile: package-lock.json
 ```

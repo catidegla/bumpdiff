@@ -1,6 +1,6 @@
 {
   "name": "bumpdiff",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "What a version bump changed about what a package can do. Install scripts, new capabilities, new hosts, a new publisher. Nothing touches disk, no install script runs, zero dependencies.",
   "type": "module",
   "bin": {
