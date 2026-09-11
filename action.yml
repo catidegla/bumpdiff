@@ -1,0 +1,105 @@
+name: bumpdiff
+description: Show what a dependency bump changed about what a package can do, before you merge it.
+author: Christ-loisele Atidegla
+
+branding:
+  icon: package
+  color: green
+
+inputs:
+  lockfile:
+    description: The lockfile to read version changes from.
+    default: package-lock.json
+  base-ref:
+    description: What to diff against. On a pull request this defaults to the base of the pull request.
+    default: ''
+  quiet:
+    description: Only fetch and report what is worth reading, and skip the background findings.
+    default: 'true'
+  summary:
+    description: Write the findings to the job summary.
+    default: 'true'
+  fail-on-findings:
+    description: Fail the job when something is worth reading before merge. Set false to report without blocking, which is the right setting for the first week.
+    default: 'true'
+  notice-fails:
+    description: Fail on notices too, not only on findings worth reading.
+    default: 'false'
+
+outputs:
+  findings:
+    description: How many changes were reported.
+    value: ${{ steps.diff.outputs.findings }}
+  report:
+    description: Path to the JSON report.
+    value: ${{ steps.diff.outputs.report }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - id: diff
+      shell: bash
+      run: |
+        base="${{ inputs.base-ref }}"
+        if [ -z "$base" ]; then base="${{ github.event.pull_request.base.sha }}"; fi
+        if [ -z "$base" ]; then base="${{ github.event.before }}"; fi
+
+        nothing() {
+          echo "findings=0" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.summary }}" = "true" ]; then
+            printf '### bumpdiff\n\n%s\n' "$1" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit 0
+        }
+
+        if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+          nothing "Nothing to diff against, so nothing was compared."
+        fi
+
+        # A shallow checkout usually has neither side of the comparison.
+        git fetch --no-tags --depth=1 origin "$base" 2>/dev/null || true
+
+        if ! git cat-file -e "$base" 2>/dev/null; then
+          echo "::warning::bumpdiff could not reach $base, so nothing was compared"
+          nothing "Could not reach the base commit, so nothing was compared."
+        fi
+
+        if git diff --quiet "$base" -- "${{ inputs.lockfile }}" 2>/dev/null; then
+          nothing "No dependency versions changed in \`${{ inputs.lockfile }}\`."
+        fi
+
+        args=(lockfile --json)
+        if [ "${{ inputs.notice-fails }}" = "true" ]; then args+=(--notice-fails); fi
+        if [ "${{ inputs.quiet }}" = "true" ]; then args+=(--quiet); fi
+
+        set +e
+        git diff "$base" -- "${{ inputs.lockfile }}" | node "${{ github.action_path }}/bin/bumpdiff.mjs" "${args[@]}" > bumpdiff.json
+        code=$?
+        set -e
+
+        # Three is the registry, not the packages. A job that treats "could not
+        # check" as "nothing changed" is worse than no check at all, and a
+        # registry outage is not a reason to block somebody's merge.
+        if [ "$code" = "3" ]; then
+          echo "::warning::bumpdiff could not reach the registry, so nothing was compared"
+          nothing "The registry could not be reached, so nothing was compared."
+        fi
+
+        # Built from the report already on disk. Running bumpdiff a second time
+        # for the summary would fetch and unpack every tarball again.
+        summary=$(node "${{ github.action_path }}/.github/summary.mjs" bumpdiff.json 2> bumpdiff.count)
+        findings=$(cat bumpdiff.count)
+
+        echo "findings=$findings" >> "$GITHUB_OUTPUT"
+        echo "report=bumpdiff.json" >> "$GITHUB_OUTPUT"
+
+        if [ "${{ inputs.summary }}" = "true" ]; then
+          printf '%s\n' "$summary" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        if [ "${{ inputs.fail-on-findings }}" = "true" ]; then exit $code; fi

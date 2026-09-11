@@ -77,6 +77,23 @@ Documentation is never scanned. The first live run of this tool reported four fi
 
 ## In CI
 
+```yaml
+- uses: catidegla/bumpdiff@v0.1.0
+  with:
+    lockfile: package-lock.json
+```
+
+On a pull request it diffs against the base automatically. A base it cannot
+reach, a lockfile that did not move, and a registry that is down all pass
+quietly rather than blocking a merge on something that is not about your
+dependencies.
+
+Or in one line, which is all the action does:
+
+```bash
+git diff origin/main -- package-lock.json | npx bumpdiff lockfile
+```
+
 ```bash
 git diff origin/main -- package-lock.json | npx bumpdiff lockfile
 ```

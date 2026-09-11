@@ -59,3 +59,45 @@ jobs:
             if (r.findings.some(f => f.kind === 'host-added')) throw new Error('readme hosts leaked back into findings');
             console.log('live check passed:', r.findings.length, 'findings');
           "
+
+  action:
+    name: The action runs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The paths that must never block a merge, tested where the registry
+      # cannot make them flaky. A base that cannot be reached and a lockfile
+      # that did not move both have to pass quietly.
+      - id: unreachable
+        uses: ./
+        with:
+          base-ref: 0000000000000000000000000000000000000000
+
+      - name: An unreachable base reports nothing and passes
+        run: |
+          [ "${{ steps.unreachable.outputs.findings }}" = "0" ] || { echo "invented findings with nothing to compare"; exit 1; }
+
+      - id: unchanged
+        uses: ./
+        with:
+          base-ref: ${{ github.sha }}
+
+      - name: A lockfile that did not move reports nothing and passes
+        run: |
+          [ "${{ steps.unchanged.outputs.findings }}" = "0" ] || { echo "invented findings on an unchanged lockfile"; exit 1; }
+          echo "both quiet paths stay quiet"
+
+      - name: The summary reads a real report
+        run: |
+          node bin/bumpdiff.mjs --help > /dev/null
+          cat > sample.json <<'JSON'
+          [{"name":"chalk","versions":{"from":"4.1.2","to":"5.0.0"},
+            "findings":[{"severity":"review","summary":"it now reads machine and user details","evidence":"import os from 'node:os';"},
+                        {"severity":"context","summary":"published 119 days after the previous version"}]}]
+          JSON
+          out=$(node .github/summary.mjs sample.json 2> count.txt)
+          [ "$(cat count.txt)" = "1" ] || { echo "expected 1 counted finding, got $(cat count.txt)"; exit 1; }
+          echo "$out" | grep -q "it now reads machine and user details" || { echo "the finding is missing from the summary"; exit 1; }
+          echo "$out" | grep -q "published 119 days" && { echo "background findings should not reach the summary"; exit 1; }
+          echo "the summary reports what is worth reading and drops the rest"
