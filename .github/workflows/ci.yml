@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['20.x', '22.x', '24.x']
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # A supply chain inspector with a supply chain is an argument in a
+      # circle. The dependency count is a claim and a lockfile is the proof it
+      # stopped being true.
+      - name: No dependencies were added
+        shell: bash
+        run: |
+          test ! -f package-lock.json || (echo "a lockfile appeared" && exit 1)
+          node -e "const p=require('./package.json'); if (p.dependencies || p.devDependencies) { console.error('dependencies appeared'); process.exit(1); }"
+
+      - name: Test
+        run: npm test
+
+  live:
+    name: Against real packages
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      # The offline suite proves the logic. This proves the tarballs npm
+      # actually serves still parse, which is a different thing and the one
+      # that would break silently. Allowed to fail, because a registry outage
+      # is not a defect in this repository.
+      - name: Real tarballs still parse and compare
+        run: |
+          node bin/bumpdiff.mjs chalk --from 4.1.2 --to 5.0.0 --json > chalk.json || true
+          node -e "
+            const r = require('./chalk.json');
+            if (!r.findings.some(f => f.kind === 'capability-gained')) throw new Error('expected the os capability chalk 5 gained');
+            if (r.findings.some(f => f.kind === 'host-added')) throw new Error('readme hosts leaked back into findings');
+            console.log('live check passed:', r.findings.length, 'findings');
+          "

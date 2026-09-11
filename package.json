@@ -1,0 +1,51 @@
+{
+  "name": "bumpdiff",
+  "version": "0.1.0",
+  "description": "What a version bump changed about what a package can do. Install scripts, new capabilities, new hosts, a new publisher. Nothing touches disk, no install script runs, zero dependencies.",
+  "type": "module",
+  "bin": {
+    "bumpdiff": "bin/bumpdiff.mjs"
+  },
+  "exports": {
+    ".": "./src/compare.mjs",
+    "./capabilities": "./src/capabilities.mjs",
+    "./registry": "./src/registry.mjs",
+    "./tar": "./src/tar.mjs",
+    "./lockfile": "./src/lockfile.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/tar.test.mjs test/capabilities.test.mjs test/compare.test.mjs test/cli.test.mjs"
+  },
+  "keywords": [
+    "npm",
+    "supply-chain",
+    "security",
+    "dependencies",
+    "diff",
+    "audit",
+    "install-scripts",
+    "provenance",
+    "capability",
+    "upgrade",
+    "ci"
+  ],
+  "author": "Christ-loisele Atidegla",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/catidegla/bumpdiff.git"
+  },
+  "homepage": "https://github.com/catidegla/bumpdiff#readme",
+  "bugs": {
+    "url": "https://github.com/catidegla/bumpdiff/issues"
+  }
+}
